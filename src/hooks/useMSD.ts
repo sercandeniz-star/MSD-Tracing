@@ -45,13 +45,22 @@ export function useMSD() {
   const [consumeError, setConsumeError] = useState('');
   const [consumeSuccess, setConsumeSuccess] = useState('');
 
+  const [isConnected, setIsConnected] = useState(true);
+  const [deleteErrorMessage, setDeleteErrorMessage] = useState<string | null>(null);
+
   // 1. WebSocket data received
   useEffect(() => {
     socket.on("components-updated", (data: ComponentData[]) => {
       setServerComponents(data);
     });
+    socket.on("connect", () => setIsConnected(true));
+    socket.on("disconnect", () => setIsConnected(false));
+    socket.on("connect_error", () => setIsConnected(false));
     return () => {
       socket.off("components-updated");
+      socket.off("connect");
+      socket.off("disconnect");
+      socket.off("connect_error");
     };
   }, []);
 
@@ -63,7 +72,7 @@ export function useMSD() {
       const mapped = serverComponents.map(c => {
          // Fırınlama süresi
          const bakeElapsed = c.bakeElapsedTotalMs + (c.bakeStartTimeMs ? now - c.bakeStartTimeMs : 0);
-         // Taban ömrü süresi
+         // Raf ömrü süresi
          const floorElapsed = c.floorLifeElapsedTotalMs + (c.floorLifeStartTimeMs ? now - c.floorLifeStartTimeMs : 0);
          // Raf ömrü
          const shelfElapsed = c.shelfLifeElapsedTotalMs + (c.shelfLifeStartTimeMs ? now - c.shelfLifeStartTimeMs : 0);
@@ -94,7 +103,18 @@ export function useMSD() {
     };
 
     updateUI(); // First run
-    const timer = setInterval(updateUI, 1000); // 1 sn aralıklarla UI yenilenir
+    const timer = setInterval(() => {
+      const hasActiveTimer = serverComponents.some(c =>
+        c.bakeStartTimeMs !== null ||
+        c.floorLifeStartTimeMs !== null ||
+        c.shelfLifeStartTimeMs !== null ||
+        c.overtimeStartTimeMs !== null ||
+        c.timeOnShelfStartTimeMs !== null
+      );
+      if (hasActiveTimer) {
+        updateUI();
+      }
+    }, 1000);
     return () => clearInterval(timer);
   }, [serverComponents]);
 
@@ -107,12 +127,12 @@ export function useMSD() {
     if (!comp) return;
 
     if (comp.isSolder && comp.status === 'IN_PRODUCTION' && !comp.isReady) {
-      alert(`HATA: "${comp.name}" şu anda ısınma aşamasındadır. Isınma tamamlanmadan sistemden düşülemez!`);
+      setDeleteErrorMessage(`HATA: "${comp.name}" şu anda ısınma aşamasındadır. Isınma tamamlanmadan sistemden düşülemez!`);
       return;
     }
 
     if (comp.status !== 'IN_PRODUCTION' && !comp.status.includes('EXPIRED')) {
-      alert(`HATA: "${comp.name}" şu anda "${comp.status}" durumunda. Sadece Üretimde olan veya Süresi Dolan bileşenler tüketilebilir!`);
+      setDeleteErrorMessage(`HATA: "${comp.name}" şu anda "${comp.status}" durumunda. Sadece Üretimde olan veya Süresi Dolan bileşenler tüketilebilir!`);
       return;
     }
     setDeleteConfirmId(id);
@@ -208,7 +228,7 @@ export function useMSD() {
     const isSolder = initialStatus === 'SOLDER';
 
     const newComponent: Partial<ComponentData> = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       name: newCompName.trim(),
       thickness: isSolder ? 'N/A' : newCompThickness,
       msl: isSolder ? 'N/A' : newCompMsl,
@@ -306,6 +326,9 @@ export function useMSD() {
     consumeCompName, setConsumeCompName,
     consumeError, setConsumeError,
     consumeSuccess, setConsumeSuccess,
+
+    isConnected,
+    deleteErrorMessage, setDeleteErrorMessage,
 
     // Actions
     handleAccordionToggle,

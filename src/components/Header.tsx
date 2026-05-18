@@ -1,11 +1,13 @@
 import React from 'react';
-import { ThermometerSun, Info } from 'lucide-react';
+import { ThermometerSun, Info, ArrowLeft, ClipboardList } from 'lucide-react';
 
 interface HeaderProps {
   globalErrorCount: number;
+  currentView: 'main' | 'history';
+  setCurrentView: (view: 'main' | 'history') => void;
 }
 
-export default function Header({ globalErrorCount }: HeaderProps) {
+export default function Header({ globalErrorCount, currentView, setCurrentView }: HeaderProps) {
   return (
     <header className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div className="flex-1">
@@ -17,6 +19,20 @@ export default function Header({ globalErrorCount }: HeaderProps) {
       </div>
       
       <div className="flex items-center gap-3">
+        <button
+          onClick={() => setCurrentView(currentView === 'main' ? 'history' : 'main')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition border ${
+            currentView === 'history'
+              ? 'bg-slate-800 text-white border-slate-700 hover:bg-slate-700'
+              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 shadow-sm'
+          }`}
+        >
+          {currentView === 'history' ? (
+            <><ArrowLeft className="w-4 h-4" /> Ana Panel</>
+          ) : (
+            <><ClipboardList className="w-4 h-4" /> Tüketim Geçmişi</>
+          )}
+        </button>
         {globalErrorCount > 0 && (
           <div className="bg-red-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 animate-bounce shadow-lg shadow-red-200">
             <Info className="w-4 h-4" />

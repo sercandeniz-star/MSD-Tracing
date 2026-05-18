@@ -1,13 +1,21 @@
 import React from 'react';
 import { CheckSquare, LogOut } from 'lucide-react';
 
+interface ConsumeComponentFormProps {
+  consumeCompName: string;
+  setConsumeCompName: React.Dispatch<React.SetStateAction<string>>;
+  consumeError: string;
+  consumeSuccess: string;
+  handleConsumeComponent: (e: React.FormEvent) => void;
+}
+
 export function ConsumeComponentForm({
   consumeCompName,
   setConsumeCompName,
   consumeError,
   consumeSuccess,
   handleConsumeComponent
-}: any) {
+}: ConsumeComponentFormProps) {
   return (
     <div className="bg-emerald-50 p-5 rounded-xl border border-emerald-200 shadow-sm">
       <h2 className="text-lg font-semibold text-emerald-800 mb-2 flex items-center gap-2">

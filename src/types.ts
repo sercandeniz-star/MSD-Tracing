@@ -1,12 +1,24 @@
 export type CabinetType = 'uretim-nem' | 'uretim-kurleme' | 'uretim-raf' | 'depo-nem' | 'depo-raf' | 'lehim';
 
+export type ComponentStatus = 
+  | 'BAKING'
+  | 'DRY_CABINET'
+  | 'PACKAGED'
+  | 'COMPLETED'
+  | 'IN_PRODUCTION'
+  | 'EXPIRED'
+  | 'EXPIRED_IN_DRY_CABINET'
+  | 'EXPIRED_SOLDER'
+  | 'SOLDER'
+  | 'CONSUMED';
+
 export interface ComponentData {
   id: string;
   name: string;
   thickness: string;
   msl: string;
   cabinet: CabinetType;
-  status: string;
+  status: ComponentStatus;
 
   // Timing fields in milliseconds
   targetTimeMs: number;

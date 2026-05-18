@@ -1,7 +1,93 @@
 import React from 'react';
 import { Trash2, Factory, Flame, AlertTriangle, Archive, Package, ThermometerSun, Plus, X, Cpu } from 'lucide-react';
+import { ComponentData, CabinetType } from '../types';
 
-export function DeleteConfirmModal({ deleteConfirmId, setDeleteConfirmId, executeDelete }: any) {
+interface DeleteConfirmModalProps {
+  deleteConfirmId: string | null;
+  setDeleteConfirmId: React.Dispatch<React.SetStateAction<string | null>>;
+  executeDelete: () => void;
+}
+
+interface ProductionWarningModalProps {
+  comp: ComponentData | undefined;
+  productionWarningId: string | null;
+  setProductionWarningId: React.Dispatch<React.SetStateAction<string | null>>;
+  executeTakeToProduction: (id: string) => void;
+}
+
+interface RebakeWarningModalProps {
+  comp: ComponentData | undefined;
+  rebakeWarningId: string | null;
+  setRebakeWarningId: React.Dispatch<React.SetStateAction<string | null>>;
+  handleStartBaking: (id: string) => void;
+}
+
+interface HicCheckModalProps {
+  showHicModal: string | null;
+  setShowHicModal: React.Dispatch<React.SetStateAction<string | null>>;
+  processHicDecision: (isSafe: boolean) => void;
+}
+
+interface ShelfSelectionModalProps {
+  packageSelectionId: string | null;
+  setPackageSelectionId: React.Dispatch<React.SetStateAction<string | null>>;
+  executePackage: (id: string, cabinet: 'uretim-raf' | 'depo-raf') => void;
+  components: ComponentData[];
+}
+
+interface DryCabinetSelectionModalProps {
+  dryCabinetSelectionId: string | null;
+  setDryCabinetSelectionId: React.Dispatch<React.SetStateAction<string | null>>;
+  executeTakeToDryCabinet: (id: string, cabinet: 'uretim-nem' | 'depo-nem') => void;
+}
+
+interface AddComponentModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  newCompName: string;
+  setNewCompName: React.Dispatch<React.SetStateAction<string>>;
+  newCompThickness: string;
+  setNewCompThickness: React.Dispatch<React.SetStateAction<string>>;
+  newCompMsl: string;
+  setNewCompMsl: React.Dispatch<React.SetStateAction<string>>;
+  initialStatus: string;
+  setInitialStatus: React.Dispatch<React.SetStateAction<string>>;
+  newCompLocation: CabinetType;
+  setNewCompLocation: React.Dispatch<React.SetStateAction<CabinetType>>;
+  formError: string;
+  handleAddComponent: (e?: React.FormEvent) => void;
+  solderType: 'Kurşunlu' | 'Kurşunsuz';
+  setSolderType: React.Dispatch<React.SetStateAction<'Kurşunlu' | 'Kurşunsuz'>>;
+  solderModel: 'CVP-390' | 'OM-5100';
+  setSolderModel: React.Dispatch<React.SetStateAction<'CVP-390' | 'OM-5100'>>;
+  solderExpiry: string;
+  setSolderExpiry: React.Dispatch<React.SetStateAction<string>>;
+}
+
+interface ErrorModalProps {
+  message: string | null;
+  onClose: () => void;
+}
+
+export function ErrorModal({ message, onClose }: ErrorModalProps) {
+  if (!message) return null;
+  return (
+    <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 text-center">
+        <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-4 mx-auto">
+          <AlertTriangle className="text-red-600 w-6 h-6" />
+        </div>
+        <h2 className="text-xl font-bold text-slate-800 mb-2">İşlem Yapılamaz</h2>
+        <p className="text-slate-600 text-sm mb-6">{message}</p>
+        <button onClick={onClose} className="w-full py-2 bg-slate-900 text-white font-medium rounded hover:bg-black transition">
+          Tamam
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function DeleteConfirmModal({ deleteConfirmId, setDeleteConfirmId, executeDelete }: DeleteConfirmModalProps) {
   if (!deleteConfirmId) return null;
   return (
     <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
@@ -20,7 +106,7 @@ export function DeleteConfirmModal({ deleteConfirmId, setDeleteConfirmId, execut
   );
 }
 
-export function ProductionWarningModal({ comp, productionWarningId, setProductionWarningId, executeTakeToProduction }: any) {
+export function ProductionWarningModal({ comp, productionWarningId, setProductionWarningId, executeTakeToProduction }: ProductionWarningModalProps) {
   if (!productionWarningId) return null;
   return (
     <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
@@ -46,7 +132,7 @@ export function ProductionWarningModal({ comp, productionWarningId, setProductio
   );
 }
 
-export function RebakeWarningModal({ comp, rebakeWarningId, setRebakeWarningId, handleStartBaking }: any) {
+export function RebakeWarningModal({ comp, rebakeWarningId, setRebakeWarningId, handleStartBaking }: RebakeWarningModalProps) {
   if (!rebakeWarningId) return null;
   return (
     <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
@@ -66,7 +152,7 @@ export function RebakeWarningModal({ comp, rebakeWarningId, setRebakeWarningId, 
   );
 }
 
-export function HicCheckModal({ showHicModal, setShowHicModal, processHicDecision }: any) {
+export function HicCheckModal({ showHicModal, setShowHicModal, processHicDecision }: HicCheckModalProps) {
   if (!showHicModal) return null;
   return (
     <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
@@ -93,9 +179,9 @@ export function HicCheckModal({ showHicModal, setShowHicModal, processHicDecisio
   );
 }
 
-export function ShelfSelectionModal({ packageSelectionId, setPackageSelectionId, executePackage, components }: any) {
+export function ShelfSelectionModal({ packageSelectionId, setPackageSelectionId, executePackage, components }: ShelfSelectionModalProps) {
   if (!packageSelectionId) return null;
-  const comp = components?.find((c: any) => c.id === packageSelectionId);
+  const comp = components?.find(c => c.id === packageSelectionId);
   const canGoToDepoRaf = comp?.cabinet?.startsWith('depo') || comp?.cabinet === 'uretim-nem';
   
   return (
@@ -132,7 +218,7 @@ export function ShelfSelectionModal({ packageSelectionId, setPackageSelectionId,
   );
 }
 
-export function DryCabinetSelectionModal({ dryCabinetSelectionId, setDryCabinetSelectionId, executeTakeToDryCabinet }: any) {
+export function DryCabinetSelectionModal({ dryCabinetSelectionId, setDryCabinetSelectionId, executeTakeToDryCabinet }: DryCabinetSelectionModalProps) {
   if (!dryCabinetSelectionId) return null;
   return (
     <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
@@ -187,7 +273,7 @@ export function AddComponentModal({
   setSolderModel,
   solderExpiry,
   setSolderExpiry
-}: any) {
+}: AddComponentModalProps) {
   if (!isOpen) return null;
 
   const isSolder = initialStatus === 'SOLDER';

@@ -5,7 +5,7 @@ import { createServer as createViteServer } from "vite";
 import { Server } from "socket.io";
 import { createServer } from "http";
 import Database from "better-sqlite3";
-import { ComponentData } from "./src/types";
+import { ComponentData, ComponentStatus } from "./src/types";
 
 const app = express();
 const httpServer = createServer(app);
@@ -15,6 +15,46 @@ const io = new Server(httpServer, {
 const PORT = 3000;
 
 app.use(express.json());
+
+app.get("/api/consumed", (_req, res) => {
+  const rows = db.prepare(
+    "SELECT * FROM components WHERE status = 'CONSUMED' ORDER BY consumedAt DESC"
+  ).all();
+  const components = rows.map(parseRow);
+  res.json(components);
+});
+
+app.get("/api/consumed/export-csv", (_req, res) => {
+  const rows = db.prepare(
+    "SELECT * FROM components WHERE status = 'CONSUMED' ORDER BY consumedAt DESC"
+  ).all();
+  const components = rows.map(parseRow);
+
+  const headers = [
+    "Barkod/İsim", "Tip", "MSL", "Kalınlık",
+    "Kürleme Sayısı", "Tüketim Tarihi", "Son Log"
+  ];
+
+  const csvRows = components.map(c => {
+    const lastLog = c.history.length > 0 ? c.history[c.history.length - 1] : '';
+    return [
+      `"${c.name}"`,
+      c.isSolder ? `"Lehim (${c.solderType ?? ''})"` : '"MSD Bileşen"',
+      `"${c.msl ?? 'N/A'}"`,
+      `"${c.thickness ?? 'N/A'}"`,
+      `"${c.bakeCount}"`,
+      `"${c.consumedAt ?? ''}"`,
+      `"${lastLog.replace(/"/g, "'")}"`,
+    ].join(',');
+  });
+
+  const csv = [headers.join(','), ...csvRows].join('\n');
+  const filename = `tuketim-gecmisi-${new Date().toLocaleDateString('tr-TR').replace(/\./g, '-')}.csv`;
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send('\uFEFF' + csv); // BOM for Excel Turkish charset
+});
 
 // 1. DATA INTEGRITY: SQLite Entegrasyonu
 const LOGS_DIR = path.join(process.cwd(), "logs");
@@ -165,6 +205,7 @@ const updateComponentDb = db.prepare(`
 function parseRow(row: any): ComponentData {
   return {
     ...row,
+    status: row.status as ComponentStatus,
     history: JSON.parse(row.history),
     isSolder: Boolean(row.isSolder),
     isReady: Boolean(row.isReady),
@@ -208,6 +249,12 @@ function loadAllComponents(): ComponentData[] {
   return rows.map(parseRow);
 }
 
+function loadComponentById(id: string): ComponentData | undefined {
+  const row = db.prepare("SELECT * FROM components WHERE id = ?").get(id) as any;
+  if (!row) return undefined;
+  return parseRow(row);
+}
+
 function saveComponent(comp: ComponentData) {
   const serialized = serializeRow(comp);
   const existing = db.prepare("SELECT id FROM components WHERE id=?").get(comp.id);
@@ -216,10 +263,6 @@ function saveComponent(comp: ComponentData) {
   } else {
     insertComponent.run(serialized);
   }
-}
-
-function deleteComponentDb(id: string) {
-    db.prepare("DELETE FROM components WHERE id=?").run(id);
 }
 
 // 4. PAYLOAD VALIDATION & GUARD
@@ -285,8 +328,24 @@ setInterval(() => {
          comp.status = 'EXPIRED';
          comp.floorLifeElapsedTotalMs = comp.floorLifeTotalMs;
          comp.floorLifeStartTimeMs = null;
-         comp.history.push(`${getTimestamp()} DİKKAT: Taban ömrü doldu!`);
+         comp.history.push(`${getTimestamp()} DİKKAT: Raf ömrü doldu!`);
          compChanged = true;
+      }
+    }
+
+    // Raf ömrü kontrolü (PACKAGED bileşenler için)
+    if (
+      (comp.status === 'PACKAGED') &&
+      comp.shelfLifeStartTimeMs &&
+      comp.shelfLifeTotalMs > 0
+    ) {
+      const shelfElapsed = comp.shelfLifeElapsedTotalMs + (now - comp.shelfLifeStartTimeMs);
+      if (shelfElapsed >= comp.shelfLifeTotalMs) {
+        comp.status = 'EXPIRED';
+        comp.shelfLifeElapsedTotalMs = comp.shelfLifeTotalMs;
+        comp.shelfLifeStartTimeMs = null;
+        comp.history.push(`${getTimestamp()} DİKKAT: Raf ömrü doldu! Bileşen paket içinde expire oldu.`);
+        compChanged = true;
       }
     }
 
@@ -341,7 +400,7 @@ io.on("connection", (socket) => {
       case "executeDelete":
         if (!isValidId(payload)) return callback && callback({ error: "Invalid ID" });
         processTx(() => {
-          const comp = loadAllComponents().find(c => c.id === payload);
+          const comp = loadComponentById(payload);
           if (comp) {
             comp.status = 'CONSUMED';
             comp.cabinet = comp.isSolder ? 'lehim' : 'uretim-raf';
@@ -357,7 +416,7 @@ io.on("connection", (socket) => {
       case "handleStartBaking":
         if (!isValidId(payload)) return callback && callback({ error: "Invalid ID" });
         processTx(() => {
-          const c = loadAllComponents().find(c => c.id === payload);
+          const c = loadComponentById(payload);
           if (c) {
             const bakeLog = `${c.bakeCount + 1}. Fırınlama döngüsü başlatıldı. Yer: Üretim Kürleme Dolabı`;
             c.status = 'BAKING';
@@ -386,7 +445,7 @@ io.on("connection", (socket) => {
            return callback && callback({ error: "Invalid payload for executePackage" });
         }
         processTx(() => {
-          const c = loadAllComponents().find(c => c.id === payload.id);
+          const c = loadComponentById(payload.id);
           if (c) {
             if (c.floorLifeStartTimeMs) {
                 c.floorLifeElapsedTotalMs += (now - c.floorLifeStartTimeMs);
@@ -413,7 +472,7 @@ io.on("connection", (socket) => {
            return callback && callback({ error: "Invalid payload for executeTakeToDryCabinet" });
         }
         processTx(() => {
-          const c = loadAllComponents().find(c => c.id === payload.id);
+          const c = loadComponentById(payload.id);
           if (c) {
             const cabinetTitle = payload.cabinet === 'uretim-nem' ? 'Üretim Nem Dolabı' : 'Depo Nem Dolabı';
             
@@ -445,7 +504,7 @@ io.on("connection", (socket) => {
       case "executeTakeToProduction":
         if (!isValidId(payload)) return callback && callback({ error: "Invalid ID" });
         processTx(() => {
-          const c = loadAllComponents().find(c => c.id === payload);
+          const c = loadComponentById(payload);
           if (c) {
             c.status = 'IN_PRODUCTION';
             c.cabinet = 'uretim-raf';
@@ -454,7 +513,7 @@ io.on("connection", (socket) => {
             
             c.floorLifeStartTimeMs = now;
 
-            c.history.push(`${getTimestamp()} Üretime alındı. Üretim Rafına taşındı. Taban ömrü sayacı başladı.`);
+            c.history.push(`${getTimestamp()} Üretime alındı. Üretim Rafına taşındı. Raf ömrü sayacı başladı.`);
             saveComponent(c);
           }
         });
@@ -463,7 +522,7 @@ io.on("connection", (socket) => {
       case "handleResumeBaking":
         if (!isValidId(payload)) return callback && callback({ error: "Invalid ID" });
         processTx(() => {
-          const c = loadAllComponents().find(c => c.id === payload);
+          const c = loadComponentById(payload);
           if (c) {
             c.status = 'BAKING';
             c.cabinet = 'uretim-kurleme';
@@ -477,7 +536,7 @@ io.on("connection", (socket) => {
       case "handleSolderProductionRequest":
         if (!isValidId(payload)) return callback && callback({ error: "Invalid ID" });
         processTx(() => {
-          const c = loadAllComponents().find(c => c.id === payload);
+          const c = loadComponentById(payload);
           if (c) {
             const warmUpHours = c.solderModel === 'CVP-390' ? 4 : 8;
             c.status = 'IN_PRODUCTION';
@@ -500,7 +559,7 @@ io.on("connection", (socket) => {
       case "handleReturnToSolderCabinet":
         if (!isValidId(payload)) return callback && callback({ error: "Invalid ID" });
         processTx(() => {
-          const c = loadAllComponents().find(c => c.id === payload);
+          const c = loadComponentById(payload);
           if (c) {
             c.status = 'SOLDER';
             c.cabinet = 'lehim';
@@ -523,7 +582,7 @@ io.on("connection", (socket) => {
       case "processHicDecision":
         if (!payload || !isValidId(payload.id) || typeof payload.isBlue !== 'boolean') return callback && callback({ error: "Invalid HIC payload" });
         processTx(() => {
-          const c = loadAllComponents().find(c => c.id === payload.id);
+          const c = loadComponentById(payload.id);
           if (c) {
             if (payload.isBlue) {
               if ((c.bakeElapsedTotalMs + (c.bakeStartTimeMs ? now - c.bakeStartTimeMs : 0)) < c.targetTimeMs) {
@@ -611,23 +670,40 @@ io.on("connection", (socket) => {
         break;
         
       case "handleTransferToUretimNem":
-         if (!isValidId(payload)) return;
-         processTx(() => {
-            const c = loadAllComponents().find(c => c.id === payload);
-            if(c) { c.cabinet = 'uretim-nem'; c.history.push(`${getTimestamp()} Transferred to Üretim Nem.`); saveComponent(c); }
-         }); break;
+        if (!isValidId(payload)) return callback && callback({ error: "Geçersiz ID" });
+        processTx(() => {
+          const c = loadComponentById(payload);
+          if (c) {
+            c.cabinet = 'uretim-nem';
+            c.history.push(`${getTimestamp()} Üretim Nem Dolabına transfer edildi.`);
+            saveComponent(c);
+          }
+        });
+        break;
+
       case "handleTransferToUretimRaf":
-         if (!isValidId(payload)) return;
-         processTx(() => {
-            const c = loadAllComponents().find(c => c.id === payload);
-            if(c) { c.cabinet = 'uretim-raf'; c.history.push(`${getTimestamp()} Transferred to Üretim Raf.`); saveComponent(c); }
-         }); break;
+        if (!isValidId(payload)) return callback && callback({ error: "Geçersiz ID" });
+        processTx(() => {
+          const c = loadComponentById(payload);
+          if (c) {
+            c.cabinet = 'uretim-raf';
+            c.history.push(`${getTimestamp()} Üretim Rafına transfer edildi.`);
+            saveComponent(c);
+          }
+        });
+        break;
+
       case "handleTransferToDepoRaf":
-         if (!isValidId(payload)) return;
-         processTx(() => {
-            const c = loadAllComponents().find(c => c.id === payload);
-            if(c) { c.cabinet = 'depo-raf'; c.history.push(`${getTimestamp()} Transferred to Depo Raf.`); saveComponent(c); }
-         }); break;
+        if (!isValidId(payload)) return callback && callback({ error: "Geçersiz ID" });
+        processTx(() => {
+          const c = loadComponentById(payload);
+          if (c) {
+            c.cabinet = 'depo-raf';
+            c.history.push(`${getTimestamp()} Depo Rafına transfer edildi.`);
+            saveComponent(c);
+          }
+        });
+        break;
     }
     
     if (callback) {

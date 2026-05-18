@@ -21,16 +21,32 @@ import {
   Clock,
   Calendar
 } from 'lucide-react';
-import { getStatusConfig, getFutureTimestampDisplay } from '../lib/utils';
+import { getStatusConfig, getFutureTimestampDisplay, isErrorStatus } from '../lib/utils';
 import { ComponentData } from '../types';
+
+interface CardActions {
+  handleRebakeRequest: (id: string) => void;
+  handleTakeToDryCabinet: (id: string) => void;
+  executeTakeToDryCabinet: (id: string, cabinet: 'uretim-nem' | 'depo-nem') => void;
+  handleStartBaking: (id: string) => void;
+  handlePackage: (id: string, context: string) => void;
+  handleProductionRequest: (id: string) => void;
+  handleResumeBaking: (id: string) => void;
+  setShowHicModal: React.Dispatch<React.SetStateAction<string | null>>;
+  handleTransferToUretimNem: (id: string) => void;
+  handleTransferToUretimRaf: (id: string) => void;
+  handleTransferToDepoRaf: (id: string) => void;
+  handleSolderProductionRequest: (id: string) => void;
+  handleReturnToSolderCabinet: (id: string) => void;
+}
 
 interface ComponentCardProps {
   key?: any;
   comp: ComponentData;
   isExpanded: boolean;
   onToggleExpand: (id: string) => void;
-  onDeleteRequest: (id: any) => void;
-  actions: any;
+  onDeleteRequest: (id: string) => void;
+  actions: CardActions;
 }
 
 export default function ComponentCard({
@@ -48,7 +64,7 @@ export default function ComponentCard({
   const shelfRemainingHours = Math.max(0, comp.shelfLifeTotal - comp.shelfLifeElapsed);
   const shelfRemainingPercent = Math.max(0, (shelfRemainingHours / comp.shelfLifeTotal) * 100);
   
-  const isErrorComponent = comp.status === 'EXPIRED' || comp.status === 'EXPIRED_IN_DRY_CABINET' || comp.status === 'EXPIRED_SOLDER' || (comp.status === 'COMPLETED' && comp.overtime > 0);
+  const isErrorComponent = isErrorStatus(comp.status, comp.overtime);
   const isBakingFinished = comp.elapsedTime >= comp.targetTime;
   const isConsumed = comp.status === 'CONSUMED';
 
@@ -156,7 +172,7 @@ export default function ComponentCard({
                 {comp.status === 'PACKAGED' ? (
                   <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded border border-blue-200">Toplam Raf Ömrü: 1 Yıl (8760 S)</span>
                 ) : (
-                  <span className="bg-purple-50 text-purple-700 px-2 py-1 rounded border border-purple-200">Toplam Taban Ömrü: {Number(comp.floorLifeTotal).toFixed(2)} Saat</span>
+                  <span className="bg-purple-50 text-purple-700 px-2 py-1 rounded border border-purple-200">Toplam Raf Ömrü: {Number(comp.floorLifeTotal).toFixed(2)} Saat</span>
                 )}
               </>
             )}
@@ -266,7 +282,7 @@ export default function ComponentCard({
                   {isErrorComponent ? <AlertTriangle className="w-6 h-6 text-red-600" /> : (comp.status === 'DRY_CABINET' ? <Archive className="w-6 h-6 text-cyan-600" /> : <Clock className="w-6 h-6 text-purple-600" />)}
                   <div className="flex-1">
                      <div className="flex justify-between items-end mb-1">
-                       <span className="block text-xs uppercase tracking-wider font-bold opacity-70">Taban Ömrü Süreci</span>
+                       <span className="block text-xs uppercase tracking-wider font-bold opacity-70">Raf Ömrü Süreci</span>
                        <span className="font-bold text-xs">{floorRemainingPercent.toFixed(1)}% ({Number(comp.floorLifeElapsed).toFixed(2)}/{Number(comp.floorLifeTotal).toFixed(2)} S)</span>
                      </div>
                      <span className={`block py-0.5 font-black text-lg flex items-center gap-2 ${getStatusColor(floorRemainingHours, 4)}`}>

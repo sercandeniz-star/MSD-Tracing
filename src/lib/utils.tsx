@@ -16,6 +16,15 @@ export const getTimestamp = () => {
   return `[${now.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' })} ${now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}]`;
 };
 
+export const isErrorStatus = (status: string, overtime?: number): boolean => {
+  return (
+    status === 'EXPIRED' ||
+    status === 'EXPIRED_IN_DRY_CABINET' ||
+    status === 'EXPIRED_SOLDER' ||
+    (status === 'COMPLETED' && (overtime ?? 0) > 0)
+  );
+};
+
 export const getFutureTimestampDisplay = (remainingHours: number) => {
   const futureMs = Date.now() + remainingHours * 3600000;
   const futureDate = new Date(futureMs);
